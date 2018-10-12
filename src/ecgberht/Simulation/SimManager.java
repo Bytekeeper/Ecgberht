@@ -102,6 +102,7 @@ public class SimManager {
     private MutablePair<Integer, Integer> scores() {
         ToIntFunction<Agent> score = a -> {
             PlayerUnit unit = (PlayerUnit) a.getUserObject();
+            if (unit == null) return 0;
             int result = (unit.getType().destroyScore() * unit.getHitPoints()) / (
                 unit.getType().maxHitPoints() * 2);
             if (unit.getType() == UnitType.Terran_Bunker) {
