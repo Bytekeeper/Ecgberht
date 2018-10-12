@@ -1,7 +1,9 @@
 package ecgberht.Simulation;
 
-import jfap.JFAPUnit;
-import jfap.MutablePair;
+import ecgberht.Util.MutablePair;
+import java.util.ArrayList;
+import java.util.Collection;
+import org.bk.ass.Agent;
 import org.openbw.bwapi4j.unit.Unit;
 
 import java.util.Set;
@@ -14,8 +16,8 @@ public class SimInfo {
     public Set<Unit> enemies = new TreeSet<>();
     public MutablePair<Integer, Integer> preSimScore;
     public MutablePair<Integer, Integer> postSimScore;
-    public MutablePair<Set<JFAPUnit>, Set<JFAPUnit>> stateBefore = new MutablePair<>(new TreeSet<>(), new TreeSet<>());
-    public MutablePair<Set<JFAPUnit>, Set<JFAPUnit>> stateAfter = new MutablePair<>(new TreeSet<>(), new TreeSet<>());
+    public MutablePair<Collection<Agent>, Collection<Agent>> stateBefore = new MutablePair<>(new ArrayList<>(), new ArrayList<>());
+    public MutablePair<Collection<Agent>, Collection<Agent>> stateAfter = new MutablePair<>(new TreeSet<>(), new TreeSet<>());
     public boolean lose = false;
 
     public enum SimType {GROUND, AIR, MIX}

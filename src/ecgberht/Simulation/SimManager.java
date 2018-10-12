@@ -8,8 +8,10 @@ import ecgberht.IntelligenceAgency;
 import ecgberht.Util.ColorUtil;
 import ecgberht.Util.MutablePair;
 import ecgberht.Util.Util;
-import jfap.JFAP;
-import jfap.JFAPUnit;
+import java.util.function.ToIntFunction;
+import org.bk.ass.Agent;
+import org.bk.ass.BWAPI4JAgentFactory;
+import org.bk.ass.Simulator;
 import org.openbw.bwapi4j.BW;
 import org.openbw.bwapi4j.Position;
 import org.openbw.bwapi4j.type.*;
@@ -28,14 +30,15 @@ public class SimManager {
     private List<Cluster> friendly = new ArrayList<>();
     private List<Cluster> enemies = new ArrayList<>();
     private List<SimInfo> simulations = new ArrayList<>();
-    private JFAP simulator;
+    private Simulator simulator;
     private double radius = UnitType.Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange();
     private int shortSimFrames = 90;
     private int longSimFrames = 300;
     private int iterations = 10;
+    private BWAPI4JAgentFactory factory = new BWAPI4JAgentFactory();
 
     public SimManager(BW bw) {
-        simulator = new JFAP(bw);
+        simulator = new Simulator();
         if (ConfigManager.getConfig().ecgConfig.sscait) {
             shortSimFrames = 45;
             longSimFrames = 170;
@@ -92,8 +95,22 @@ public class SimManager {
     private void reset() {
         friendly.clear();
         enemies.clear();
-        simulator.clear();
+        simulator.reset();
         simulations.clear();
+    }
+
+    private MutablePair<Integer, Integer> scores() {
+        ToIntFunction<Agent> score = a -> {
+            PlayerUnit unit = (PlayerUnit) a.getUserObject();
+            int result = (unit.getType().destroyScore() * unit.getHitPoints()) / (
+                unit.getType().maxHitPoints() * 2);
+            if (unit.getType() == UnitType.Terran_Bunker) {
+                result += UnitType.Terran_Marine.destroyScore() * 4;
+            }
+            return result;
+        };
+        return new MutablePair<>(simulator.getAgentsA().stream().mapToInt(score).sum(),
+            simulator.getAgentsB().stream().mapToInt(score).sum());
     }
 
     /**
@@ -221,10 +238,10 @@ public class SimManager {
             if (s.getOrder() != Order.CastScannerSweep) energy += s.getEnergy() / 50;
         }
         for (SimInfo s : simulations) {
-            simulator.clear();
+            simulator.reset();
             for (Unit u : s.allies) {
-                JFAPUnit jU = new JFAPUnit(u);
-                simulator.addUnitPlayer1(jU);
+                Agent jU = factory.of((PlayerUnit) u, 0, 0).setUserObject(u);
+                simulator.addAgentA(jU);
                 s.stateBefore.first.add(jU);
             }
             for (Unit u : s.enemies) {
@@ -237,16 +254,16 @@ public class SimManager {
                         break;
                     }
                 }
-                JFAPUnit jU = new JFAPUnit(u);
-                simulator.addUnitPlayer2(jU);
+                Agent jU = factory.of((PlayerUnit) u, 0, 0).setUserObject(u);
+                simulator.addAgentB(jU);
                 s.stateBefore.second.add(jU);
             }
             if (s.lose) continue;
             if (getGs().getArmySize(s.allies) >= s.enemies.size() * 5) return;
-            s.preSimScore = simulator.playerScores();
+            s.preSimScore = scores();
             simulator.simulate(shortSimFrames);
-            s.postSimScore = simulator.playerScores();
-            s.stateAfter = simulator.getState();
+            s.postSimScore = scores();
+            s.stateAfter = new MutablePair<>(simulator.getAgentsA(), simulator.getAgentsB());
             int ourLosses = s.preSimScore.first - s.postSimScore.first;
             int enemyLosses = s.preSimScore.second - s.postSimScore.second;
             if (s.stateAfter.first.isEmpty()) {
@@ -255,8 +272,8 @@ public class SimManager {
             }
             if (enemyLosses > ourLosses * 1.5) continue;
             simulator.simulate(longSimFrames);
-            s.postSimScore = simulator.playerScores();
-            s.stateAfter = simulator.getState();
+            s.postSimScore = scores();
+            s.stateAfter = new MutablePair<>(simulator.getAgentsA(), simulator.getAgentsB());
             //Bad lose sim logic, testing
             if (getGs().strat.name.equals("ProxyBBS")) s.lose = !scoreCalc(s, 2) || s.stateAfter.first.isEmpty();
             else s.lose = !scoreCalc(s, 3) || s.stateAfter.first.isEmpty();
@@ -308,21 +325,21 @@ public class SimManager {
 
     // TODO improve and search for bunkers SimInfos
     public MutablePair<Boolean, Boolean> simulateDefenseBattle(Set<Unit> friends, Set<Unit> enemies, int frames, boolean bunker) {
-        simulator.clear();
+        simulator.reset();
         MutablePair<Boolean, Boolean> result = new MutablePair<>(true, false);
-        for (Unit u : friends) simulator.addUnitPlayer1(new JFAPUnit(u));
-        for (Unit u : enemies) simulator.addUnitPlayer2(new JFAPUnit(u));
-        jfap.MutablePair<Integer, Integer> presim_scores = simulator.playerScores();
+        for (Unit u : friends) simulator.addAgentA(factory.of((PlayerUnit) u, 0, 0).setUserObject(u));
+        for (Unit u : enemies) simulator.addAgentB(factory.of((PlayerUnit) u, 0, 0).setUserObject(u));
+        MutablePair<Integer, Integer> presim_scores = scores();
         simulator.simulate(frames);
-        jfap.MutablePair<Integer, Integer> postsim_scores = simulator.playerScores();
+        MutablePair<Integer, Integer> postsim_scores = scores();
         int my_score_diff = presim_scores.first - postsim_scores.first;
         int enemy_score_diff = presim_scores.second - postsim_scores.second;
         if (enemy_score_diff * 2 < my_score_diff) result.first = false;
         if (bunker) {
             boolean bunkerDead = true;
-            for (JFAPUnit unit : simulator.getState().first) {
-                if (unit.unit == null) continue;
-                if (unit.unit.getType() == UnitType.Terran_Bunker) {
+            for (Agent unit : simulator.getAgentsA()) {
+                if (unit.getUserObject() == null) continue;
+                if (((Unit)unit.getUserObject()).getType() == UnitType.Terran_Bunker) {
                     bunkerDead = false;
                     break;
                 }
@@ -335,12 +352,12 @@ public class SimManager {
 
     // TODO improve and search for harasser SimInfo
     public boolean simulateHarass(Unit harasser, Collection<Unit> enemies, int frames) {
-        simulator.clear();
-        simulator.addUnitPlayer1(new JFAPUnit(harasser));
-        for (Unit u : enemies) simulator.addUnitPlayer2(new JFAPUnit(u));
-        int preSimFriendlyUnitCount = simulator.getState().first.size();
+        simulator.reset();
+        simulator.addAgentA(factory.of((PlayerUnit) harasser, 0, 0).setUserObject(harasser));
+        for (Unit u : enemies) simulator.addAgentB(factory.of((PlayerUnit) u, 0, 0).setUserObject(u));
+        int preSimFriendlyUnitCount = simulator.getAgentsA().size();
         simulator.simulate(frames);
-        int postSimFriendlyUnitCount = simulator.getState().first.size();
+        int postSimFriendlyUnitCount = simulator.getAgentsA().size();
         int myLosses = preSimFriendlyUnitCount - postSimFriendlyUnitCount;
         return myLosses <= 0;
     }
