@@ -103,9 +103,10 @@ public class SimManager {
         ToIntFunction<Agent> score = a -> {
             PlayerUnit unit = (PlayerUnit) a.getUserObject();
             if (unit == null) return 0;
-            int result = (unit.getType().destroyScore() * unit.getHitPoints()) / (
-                unit.getType().maxHitPoints() * 2);
-            if (unit.getType() == UnitType.Terran_Bunker) {
+            UnitType unitType = unit.getType();
+            int result = (unitType.destroyScore() * (a.getHealth()  * 3+ a.getShields() + 1) ) / (
+                (unitType.maxHitPoints() * 3) + unitType.maxShields());
+            if (unitType == UnitType.Terran_Bunker) {
                 result += UnitType.Terran_Marine.destroyScore() * 4;
             }
             return result;
