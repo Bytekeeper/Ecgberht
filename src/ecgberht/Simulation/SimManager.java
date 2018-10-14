@@ -11,6 +11,7 @@ import ecgberht.Util.Util;
 import java.util.function.ToIntFunction;
 import org.bk.ass.Agent;
 import org.bk.ass.BWAPI4JAgentFactory;
+import org.bk.ass.Evaluator;
 import org.bk.ass.Simulator;
 import org.openbw.bwapi4j.BW;
 import org.openbw.bwapi4j.Position;
@@ -31,17 +32,18 @@ public class SimManager {
     private List<Cluster> enemies = new ArrayList<>();
     private List<SimInfo> simulations = new ArrayList<>();
     private Simulator simulator;
+    private Evaluator evaluator;
     private double radius = UnitType.Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange();
-    private int shortSimFrames = 90;
     private int longSimFrames = 300;
     private int iterations = 10;
-    private BWAPI4JAgentFactory factory = new BWAPI4JAgentFactory();
+    private BWAPI4JAgentFactory factory;
 
     public SimManager(BW bw) {
         simulator = new Simulator();
+        evaluator = new Evaluator();
+        factory = new BWAPI4JAgentFactory(bw.getBWMap());
         if (ConfigManager.getConfig().ecgConfig.sscait) {
-            shortSimFrames = 45;
-            longSimFrames = 170;
+            longSimFrames = 220;
             iterations = 0;
         }
         switch (bw.getInteractionHandler().enemy().getRace()) {
@@ -242,7 +244,7 @@ public class SimManager {
         for (SimInfo s : simulations) {
             simulator.reset();
             for (Unit u : s.allies) {
-                Agent jU = factory.of((PlayerUnit) u, 0, 0).setUserObject(u);
+                Agent jU = factory.of((PlayerUnit) u);
                 simulator.addAgentA(jU);
                 s.stateBefore.first.add(jU);
             }
@@ -256,23 +258,19 @@ public class SimManager {
                         break;
                     }
                 }
-                Agent jU = factory.of((PlayerUnit) u, 0, 0).setUserObject(u);
+                Agent jU = factory.of((PlayerUnit) u);
                 simulator.addAgentB(jU);
                 s.stateBefore.second.add(jU);
             }
             if (s.lose) continue;
             if (getGs().getArmySize(s.allies) >= s.enemies.size() * 5) return;
             s.preSimScore = scores();
-            simulator.simulate(shortSimFrames);
-            s.postSimScore = scores();
-            s.stateAfter = new MutablePair<>(simulator.getAgentsA(), simulator.getAgentsB());
-            int ourLosses = s.preSimScore.first - s.postSimScore.first;
-            int enemyLosses = s.preSimScore.second - s.postSimScore.second;
-            if (s.stateAfter.first.isEmpty()) {
+            double estimate = evaluator.evaluate(s.stateBefore.first, s.stateBefore.second);
+            if (estimate < 0.1) {
                 s.lose = true;
                 continue;
             }
-            if (enemyLosses > ourLosses * 1.5) continue;
+            if (estimate > 0.6) continue;
             simulator.simulate(longSimFrames);
             s.postSimScore = scores();
             s.stateAfter = new MutablePair<>(simulator.getAgentsA(), simulator.getAgentsB());
@@ -329,8 +327,8 @@ public class SimManager {
     public MutablePair<Boolean, Boolean> simulateDefenseBattle(Set<Unit> friends, Set<Unit> enemies, int frames, boolean bunker) {
         simulator.reset();
         MutablePair<Boolean, Boolean> result = new MutablePair<>(true, false);
-        for (Unit u : friends) simulator.addAgentA(factory.of((PlayerUnit) u, 0, 0).setUserObject(u));
-        for (Unit u : enemies) simulator.addAgentB(factory.of((PlayerUnit) u, 0, 0).setUserObject(u));
+        for (Unit u : friends) simulator.addAgentA(factory.of((PlayerUnit) u));
+        for (Unit u : enemies) simulator.addAgentB(factory.of((PlayerUnit) u));
         MutablePair<Integer, Integer> presim_scores = scores();
         simulator.simulate(frames);
         MutablePair<Integer, Integer> postsim_scores = scores();
@@ -355,8 +353,8 @@ public class SimManager {
     // TODO improve and search for harasser SimInfo
     public boolean simulateHarass(Unit harasser, Collection<Unit> enemies, int frames) {
         simulator.reset();
-        simulator.addAgentA(factory.of((PlayerUnit) harasser, 0, 0).setUserObject(harasser));
-        for (Unit u : enemies) simulator.addAgentB(factory.of((PlayerUnit) u, 0, 0).setUserObject(u));
+        simulator.addAgentA(factory.of((PlayerUnit) harasser));
+        for (Unit u : enemies) simulator.addAgentB(factory.of((PlayerUnit) u));
         int preSimFriendlyUnitCount = simulator.getAgentsA().size();
         simulator.simulate(frames);
         int postSimFriendlyUnitCount = simulator.getAgentsA().size();
