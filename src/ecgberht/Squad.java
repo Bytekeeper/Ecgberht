@@ -38,6 +38,8 @@ public class Squad implements Comparable<Squad> {
     private boolean isArmyUnit(Unit u) {
         if (!u.exists()) return false;
         if (u instanceof Building) return false;
+        if (u instanceof SCV && (getGs().strat.name.equals("ProxyBBS") || getGs().strat.name.equals("EightRax")))
+            return true;
         if (u instanceof MobileUnit && ((MobileUnit) u).getTransport() != null) return false;
         return u instanceof Marine || u instanceof Medic || u instanceof SiegeTank || u instanceof Firebat
                 || u instanceof Vulture || u instanceof Wraith || u instanceof Goliath;
@@ -86,13 +88,12 @@ public class Squad implements Comparable<Squad> {
                     continue;
                 Position lastTarget = pU.getOrderTargetPosition() == null ? ((MobileUnit) u).getTargetPosition() :
                         pU.getOrderTargetPosition();
-                if (stimResearched && (u instanceof Marine || u instanceof Firebat)) {
-                    if (u instanceof Marine && !((Marine) u).isStimmed() && pU.isAttacking() && pU.getHitPoints() >= 25) {
-                        ((Marine) u).stimPack();
-                    } else if (u instanceof Firebat && !((Firebat) u).isStimmed() && pU.isAttacking() && pU.getHitPoints() >= 25) {
-                        ((Firebat) u).stimPack();
-                    }
+
+                if (stimResearched) {
+                    if (u instanceof Marine && shouldStim((Marine) u)) ((Marine) u).stimPack();
+                    else if (u instanceof Firebat && shouldStim((Firebat) u)) ((Firebat) u).stimPack();
                 }
+
                 if (u instanceof SiegeTank) {
                     SiegeTank t = (SiegeTank) u;
                     if (t.isSieged() && pU.getOrder() == Order.Unsieging) continue;
@@ -131,7 +132,7 @@ public class Squad implements Comparable<Squad> {
                                 getGs().getArmySize() < getGs().strat.armyForAttack && !getGs().strat.name.equals("ProxyBBS")) {
                             if (pU.getOrder() != Order.Move) move = bunker.getPosition();
                         }
-                    } else if (getGs().mainChoke != null && !getGs().EI.naughty && !getGs().strat.name.equals("ProxyBBS")) {
+                    } else if (getGs().mainChoke != null && !getGs().EI.naughty && !getGs().strat.name.equals("ProxyBBS") && !getGs().strat.name.equals("EightRax")) {
                         if (Util.broodWarDistance(getGs().mainChoke.getCenter().toPosition(), sCenter) >= 200 &&
                                 getGs().getArmySize() < getGs().strat.armyForAttack && !getGs().expanding) {
                             if (pU.getOrder() != Order.Move) move = getGs().mainChoke.getCenter().toPosition();
@@ -214,12 +215,7 @@ public class Squad implements Comparable<Squad> {
                 if (u.getType() == UnitType.Terran_Vulture) framesToOrder = 12;
                 if (frameCount - pU.getLastCommandFrame() >= framesToOrder) {
                     if (attack != null && status != Status.IDLE && (status == Status.DEFENSE || (status == Status.ATTACK && pU.isIdle()))) {
-                        lastTarget = (((MobileUnit) u).getTargetPosition() == null ? pU.getOrderTargetPosition() :
-                                ((MobileUnit) u).getTargetPosition());
-                        if (lastTarget != null && !lastTarget.equals(attack)) {
-                            ((MobileUnit) u).attack(attack);
-                            continue;
-                        }
+                        UtilMicro.attack((MobileUnit) u, attack);
                     }
                     //Experimental storm dodging?
                     if (((MobileUnit) u).isUnderStorm()) {
@@ -246,13 +242,9 @@ public class Squad implements Comparable<Squad> {
                             } else ((MobileUnit) u).move(getGs().getPlayer().getStartLocation().toPosition());
                         }
                     } else if (attack != null && !pU.isStartingAttack() && !pU.isAttacking()) {
-                        if (getGs().strat.name.equals("ProxyBBS") && !enemyToAttack.isEmpty() && u instanceof Attacker) {
+                        if ((getGs().strat.name.equals("ProxyBBS") || getGs().strat.name.equals("EightRax")) && !enemyToAttack.isEmpty() && u instanceof Attacker) {
                             Unit target = Util.getTarget(u, enemyToAttack);
-                            Unit lastTargetUnit = (((Attacker) u).getTargetUnit() == null ? pU.getOrderTarget() : ((Attacker) u).getTargetUnit());
-                            if (lastTargetUnit != null && !lastTargetUnit.equals(target)) {
-                                ((Attacker) u).attack(target);
-                                continue;
-                            }
+                            UtilMicro.attack((Attacker) u, target);
                         }
                         if (pU.getOrder() == Order.Move) ((MobileUnit) u).attack(attack);
                     }
@@ -262,6 +254,14 @@ public class Squad implements Comparable<Squad> {
             System.err.println("microUpdateOrder Error");
             e.printStackTrace();
         }
+    }
+
+    private boolean shouldStim(Marine u) {
+        return !u.isStimmed() && u.isAttacking() && u.getHitPoints() >= 25;
+    }
+
+    private boolean shouldStim(Firebat u) {
+        return !u.isStimmed() && u.isAttacking() && u.getHitPoints() >= 25;
     }
 
     private PlayerUnit getHealTarget(final Unit u, final Set<Unit> marinesToHeal) {

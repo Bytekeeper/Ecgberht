@@ -146,6 +146,8 @@ public class SimManager {
     private boolean isArmyUnit(Unit u) {
         try {
             if (!u.exists()) return false;
+            if (u instanceof SCV && (getGs().strat.name.equals("ProxyBBS") || getGs().strat.name.equals("EightRax")))
+                return true;
             if (u instanceof MobileUnit && ((MobileUnit) u).getTransport() != null) return false;
             return u instanceof Marine || u instanceof Medic || u instanceof SiegeTank || u instanceof Firebat
                     || u instanceof Vulture || u instanceof Wraith || u instanceof Goliath;
@@ -190,6 +192,10 @@ public class SimManager {
         return true;
     }
 
+    private boolean closeClusters(Cluster c1, Cluster c2) {
+        return Util.broodWarDistance(c1.mode(), c2.mode()) <= radius + (Math.max(c1.maxDistFromCenter, c2.maxDistFromCenter));
+    }
+
     /**
      * Using the clusters creates different SimInfos based on distance between them
      */
@@ -199,7 +205,7 @@ public class SimManager {
             SimInfo aux = new SimInfo();
             for (Cluster enemy : enemies) {
                 if (enemy.units.isEmpty()) continue;
-                if (Util.broodWarDistance(friend.mode(), enemy.mode()) <= radius) aux.enemies.addAll(enemy.units);
+                if (closeClusters(friend, enemy)) aux.enemies.addAll(enemy.units);
             }
             if (!aux.enemies.isEmpty()) {
                 aux.allies.addAll(friend.units);
@@ -275,8 +281,10 @@ public class SimManager {
             s.postSimScore = scores();
             s.stateAfter = new MutablePair<>(simulator.getAgentsA(), simulator.getAgentsB());
             //Bad lose sim logic, testing
-            if (getGs().strat.name.equals("ProxyBBS")) s.lose = !scoreCalc(s, 2) || s.stateAfter.first.isEmpty();
-            else s.lose = !scoreCalc(s, 2.5) || s.stateAfter.first.isEmpty();
+            if (s.stateAfter.first.isEmpty()) s.lose = true;
+            else if (getGs().strat.name.equals("ProxyBBS")) s.lose = !scoreCalc(s, 2);
+            else if (getGs().strat.name.equals("EightRax")) s.lose = !scoreCalc(s, 1.5);
+            else s.lose = !scoreCalc(s, 2.5);
         }
     }
 

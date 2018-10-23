@@ -32,8 +32,8 @@ import ecgberht.BehaviourTrees.Scanner.Scan;
 import ecgberht.BehaviourTrees.Scouting.*;
 import ecgberht.BehaviourTrees.Training.*;
 import ecgberht.BehaviourTrees.Upgrade.*;
+import ecgberht.Strategies.BioMechFE;
 import ecgberht.Strategies.FullBio;
-import ecgberht.Strategies.FullBioFE;
 import ecgberht.Strategies.FullMech;
 import ecgberht.Util.MutablePair;
 import ecgberht.Util.Util;
@@ -147,8 +147,8 @@ public class Ecgberht implements BWEventListener {
         ChoosePosition cp = new ChoosePosition("Choose Position", gs);
         ChooseWorker cw = new ChooseWorker("Choose Worker", gs);
         Move m = new Move("Move to chosen building position", gs);
-        Selector<GameHandler> chooseBuildingBuild = new Selector<>("Choose Building to build", cNB, cE, cSup);
-        if (gs.strat.bunker) chooseBuildingBuild.addChild(cBun);
+        Selector<GameHandler> chooseBuildingBuild = new Selector<>("Choose Building to build", cNB, cE, cBun, cSup);
+        //chooseBuildingBuild.addChild(cBun);
         chooseBuildingBuild.addChild(cTur);
         chooseBuildingBuild.addChild(cRef);
         if (gs.strat.buildUnits.contains(UnitType.Terran_Academy)) chooseBuildingBuild.addChild(cAca);
@@ -233,90 +233,6 @@ public class Ecgberht implements BWEventListener {
     private void run() {
         Ecgberht.bw = new BW(this);
         Ecgberht.bw.startGame();
-    }
-
-    @Override
-    public void onStart() {
-        try {
-            ConfigManager.readConfig();
-            if (!ConfigManager.getConfig().ecgConfig.debugConsole) {
-                // Disables System.err and System.Out
-                OutputStream output = null;
-                try {
-                    output = new FileOutputStream("NUL:");
-                } catch (FileNotFoundException ignored) {
-                }
-                PrintStream nullOut = new PrintStream(Objects.requireNonNull(output));
-                System.setErr(nullOut);
-                System.setOut(nullOut);
-            }
-            self = bw.getInteractionHandler().self();
-            ih = bw.getInteractionHandler();
-            IntelligenceAgency.onStartIntelligenceAgency(ih.enemy());
-            if (!ConfigManager.getConfig().ecgConfig.enableLatCom) ih.enableLatCom(false);
-            else ih.enableLatCom(true);
-            if (ConfigManager.getConfig().bwapiConfig.completeMapInformation) ih.enableCompleteMapInformation();
-            if (ConfigManager.getConfig().bwapiConfig.frameSkip != 0)
-                ih.setFrameSkip(ConfigManager.getConfig().bwapiConfig.frameSkip);
-            if (ConfigManager.getConfig().bwapiConfig.localSpeed >= 0)
-                ih.setLocalSpeed(ConfigManager.getConfig().bwapiConfig.localSpeed);
-            if (ConfigManager.getConfig().bwapiConfig.userInput) ih.enableUserInput();
-            bwem = new BWEM(bw);
-            if (bw.getBWMap().mapHash().equals("69a3b6a5a3d4120e47408defd3ca44c954997948")) { // Hitchhiker
-                ih.sendText("Hitchhiker :(");
-            }
-            bwem.initialize();
-            bwem.getMap().assignStartingLocationsToSuitableBases();
-            gs = new GameState(bw, bwem);
-            gs.initEnemyRace();
-            gs.readOpponentInfo();
-            gs.readOpponentHistory();
-            if (gs.EI.race == null) gs.EI.race = Util.raceToString(bw.getInteractionHandler().enemy().getRace());
-            gs.alwaysPools();
-            if (gs.enemyRace == Race.Zerg && gs.EI.naughty) gs.playSound("rushed.mp3");
-            gs.strat = gs.initStrat();
-            gs.updateStrat();
-            IntelligenceAgency.setStartStrat(gs.strat.name);
-            gs.initStartLocations();
-
-            boolean fortress = bw.getBWMap().mapHash().equals("83320e505f35c65324e93510ce2eafbaa71c9aa1"); // Fortress
-            for (Base b : bwem.getMap().getBases()) {
-                if (fortress) {
-                    if (b.getMinerals().size() < 3) continue;
-                    if (gs.fortressSpecialBLsTiles.contains(b.getLocation()))
-                        gs.fortressSpecialBLs.put(b, gs.getMineralWalkPatchesFortress(b));
-                    gs.BLs.add(b);
-
-                } else if (b.getArea().getAccessibleNeighbors().isEmpty()) gs.islandBases.add(b);
-                else gs.BLs.add(b);
-            }
-            gs.initBlockingMinerals();
-            gs.initBaseLocations();
-            gs.checkBasesWithBLockingMinerals();
-            gs.initChokes();
-            gs.map = new BuildingMap(bw, ih.self(), bwem);
-            gs.map.initMap();
-            gs.testMap = gs.map.clone();
-            // Trees Initializations
-            initCollectTree();
-            initTrainTree();
-            initBuildTree();
-            initScoutingTree();
-            initDefenseTree();
-            initUpgradeTree();
-            initRepairTree();
-            initAddonBuildTree();
-            initBuildingLotTree();
-            initBunkerTree();
-            initScanTree();
-            initHarassTree();
-            initIslandTree(); // TODO uncomment when BWAPI client island bug is fixed
-            gs.skycladObserver = new CameraModule(self.getStartLocation(), bw);
-            if (ConfigManager.getConfig().ecgConfig.enableSkyCladObserver) gs.skycladObserver.toggle();
-        } catch (Exception e) {
-            System.err.println("onStart Exception");
-            e.printStackTrace();
-        }
     }
 
     private void initScoutingTree() {
@@ -407,6 +323,92 @@ public class Ecgberht implements BWEventListener {
     }
 
     @Override
+    public void onStart() {
+        try {
+            ConfigManager.readConfig();
+            if (!ConfigManager.getConfig().ecgConfig.debugConsole) {
+                // Disables System.err and System.Out
+                OutputStream output = null;
+                try {
+                    output = new FileOutputStream("NUL:");
+                } catch (FileNotFoundException ignored) {
+                }
+                PrintStream nullOut = new PrintStream(Objects.requireNonNull(output));
+                System.setErr(nullOut);
+                System.setOut(nullOut);
+            }
+            self = bw.getInteractionHandler().self();
+            ih = bw.getInteractionHandler();
+            IntelligenceAgency.onStartIntelligenceAgency(ih.enemy());
+            if (!ConfigManager.getConfig().ecgConfig.enableLatCom) ih.enableLatCom(false);
+            else ih.enableLatCom(true);
+            if (ConfigManager.getConfig().bwapiConfig.completeMapInformation) ih.enableCompleteMapInformation();
+            if (ConfigManager.getConfig().bwapiConfig.frameSkip != 0)
+                ih.setFrameSkip(ConfigManager.getConfig().bwapiConfig.frameSkip);
+            if (ConfigManager.getConfig().bwapiConfig.localSpeed >= 0)
+                ih.setLocalSpeed(ConfigManager.getConfig().bwapiConfig.localSpeed);
+            if (ConfigManager.getConfig().bwapiConfig.userInput) ih.enableUserInput();
+            bwem = new BWEM(bw);
+            if (bw.getBWMap().mapHash().equals("69a3b6a5a3d4120e47408defd3ca44c954997948")) { // Hitchhiker
+                ih.sendText("Hitchhiker :(");
+            }
+            bwem.initialize();
+            bwem.getMap().assignStartingLocationsToSuitableBases();
+            gs = new GameState(bw, bwem);
+            gs.initEnemyRace();
+            gs.readOpponentInfo();
+            gs.readOpponentHistory();
+            if (gs.EI.race == null) gs.EI.race = Util.raceToString(bw.getInteractionHandler().enemy().getRace());
+            gs.alwaysPools();
+            if (gs.enemyRace == Race.Zerg && gs.EI.naughty) gs.playSound("rushed.mp3");
+            gs.strat = gs.initStrat();
+            gs.updateStrat();
+            IntelligenceAgency.setStartStrat(gs.strat.name);
+            gs.initStartLocations();
+
+            boolean fortress = bw.getBWMap().mapHash().equals("83320e505f35c65324e93510ce2eafbaa71c9aa1"); // Fortress
+            for (Base b : bwem.getMap().getBases()) {
+                if (fortress) {
+                    if (b.getMinerals().size() < 3) continue;
+                    if (gs.fortressSpecialBLsTiles.contains(b.getLocation()))
+                        gs.fortressSpecialBLs.put(b, gs.getMineralWalkPatchesFortress(b));
+                    gs.BLs.add(b);
+
+                } else if (b.getArea().getAccessibleNeighbors().isEmpty()) gs.islandBases.add(b);
+                else gs.BLs.add(b);
+            }
+            gs.initBlockingMinerals();
+            gs.initBaseLocations();
+            gs.checkBasesWithBLockingMinerals();
+            gs.initChokes();
+            gs.map = new BuildingMap(bw, ih.self(), bwem);
+            gs.map.initMap();
+            gs.testMap = gs.map.clone();
+            // Trees Initializations
+            initCollectTree();
+            initTrainTree();
+            initBuildTree();
+            initScoutingTree();
+            initDefenseTree();
+            initUpgradeTree();
+            initRepairTree();
+            initAddonBuildTree();
+            initBuildingLotTree();
+            initBunkerTree();
+            initScanTree();
+            initHarassTree();
+            initIslandTree(); // TODO uncomment when BWAPI client island bug is fixed
+            gs.skycladObserver = new CameraModule(self.getStartLocation(), bw);
+            if (ConfigManager.getConfig().ecgConfig.enableSkyCladObserver) gs.skycladObserver.toggle();
+        } catch (Exception e) {
+            System.err.println("onStart Exception");
+            e.printStackTrace();
+        }
+    }
+
+
+
+    @Override
     public void onFrame() {
         try {
             gs.frameCount = ih.getFrameCount();
@@ -454,6 +456,7 @@ public class Ecgberht implements BWEventListener {
             gs.updateEnemyBuildingsMemory();
             IntelligenceAgency.onFrame();
             gs.sim.onFrameSim();
+            gs.checkDisrupter();
             buildingLotTree.run();
             repairTree.run();
             collectTree.run();
@@ -466,7 +469,8 @@ public class Ecgberht implements BWEventListener {
             botherTree.run();
             bunkerTree.run();
             scannerTree.run();
-            if (gs.strat.name.equals("ProxyBBS")) gs.checkWorkerMilitia();
+            if (gs.strat.name.equals("ProxyBBS")) gs.checkWorkerMilitia(2);
+            else if (gs.strat.name.equals("EightRax")) gs.checkWorkerMilitia(1);
             defenseTree.run();
             gs.updateAttack();
             gs.runAgents();
@@ -550,7 +554,7 @@ public class Ecgberht implements BWEventListener {
                         if (arg0 instanceof CommandCenter) {
                             if (ih.getFrameCount() == 0) return;
                             if (gs.strat.name.equals("TwoPortWraith") && bwem.getMap().getArea(arg0.getTilePosition()).equals(gs.naturalArea)) {
-                                gs.strat = new FullBioFE();
+                                gs.strat = new BioMechFE();
                                 transition();
                             }
                         }
@@ -614,7 +618,8 @@ public class Ecgberht implements BWEventListener {
                             if (!gs.islandBases.isEmpty() && gs.islandBases.contains(ccBase))
                                 gs.islandCCs.put(ccBase, (CommandCenter) arg0);
                             else gs.CCs.put(ccBase, (CommandCenter) arg0);
-                            if (gs.strat.name.equals("BioMechGreedyFE") && Util.getNumberCCs() > 2) gs.strat.raxPerCC = 3;
+                            if (gs.strat.name.equals("BioMechGreedyFE") && Util.getNumberCCs() > 2)
+                                gs.strat.raxPerCC = 3;
                             else if (gs.strat.name.equals("BioMechGreedyFE") && Util.getNumberCCs() < 3)
                                 gs.strat.raxPerCC = 2;
                             gs.addNewResources(ccBase);
@@ -665,7 +670,7 @@ public class Ecgberht implements BWEventListener {
                     } else {
                         gs.myArmy.add(arg0);
                         if (!gs.strat.name.equals("ProxyBBS")) {
-                            if (!gs.EI.naughty || gs.enemyRace != Race.Zerg) {
+                            if (!gs.strat.name.equals("EightRax") && (!gs.EI.naughty || gs.enemyRace != Race.Zerg)) {
                                 if (!gs.DBs.isEmpty()) {
                                     ((MobileUnit) arg0).attack(gs.DBs.keySet().iterator().next().getPosition());
                                 } else if (gs.mainChoke != null) {
@@ -722,7 +727,8 @@ public class Ecgberht implements BWEventListener {
                 } else if (arg0 instanceof PlayerUnit && ((PlayerUnit) arg0).getPlayer().getId() == self.getId()) {
                     if (gs.ih.getFrameCount() > 0) gs.supplyMan.onDestroy(arg0);
                     if (arg0 instanceof Worker) {
-                        if (gs.strat.name.equals("ProxyBBS")) gs.myArmy.remove(arg0);
+                        if (gs.strat.name.equals("ProxyBBS") || gs.strat.name.equals("EightRax"))
+                            gs.myArmy.remove(arg0);
                         for (SCV r : gs.repairerTask.keySet()) {
                             if (r.equals(arg0)) {
                                 gs.workerIdle.add((Worker) arg0);

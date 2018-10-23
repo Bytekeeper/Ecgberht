@@ -1,6 +1,7 @@
 package ecgberht.BehaviourTrees.Defense;
 
 import ecgberht.GameState;
+import ecgberht.IntelligenceAgency;
 import ecgberht.Squad;
 import ecgberht.Squad.Status;
 import ecgberht.Util.MutablePair;
@@ -43,7 +44,7 @@ public class SendDefenders extends Action {
                 defenders = 1;
             }
             MutablePair<Boolean, Boolean> battleWin = new MutablePair<>(true, false);
-            if (defenders != 1) {
+            if (defenders != 1 && IntelligenceAgency.enemyIsRushing()) {
                 if (((GameState) this.handler).enemyInBase.size() + friends.size() < 40) {
                     battleWin = ((GameState) this.handler).sim.simulateDefenseBattle(friends, ((GameState) this.handler).enemyInBase, 150, bunker);
                 }
@@ -124,7 +125,7 @@ public class SendDefenders extends Action {
                         }
                     }
                 }
-            } else if (!((GameState) this.handler).strat.name.equals("ProxyBBS")) {
+            } else if (!((GameState) this.handler).strat.name.equals("ProxyBBS") && !((GameState) this.handler).strat.name.equals("EightRax")) {
                 for (Entry<Integer, Squad> u : ((GameState) this.handler).sqManager.squads.entrySet()) {
                     if (((GameState) this.handler).attackPosition != null) {
                         u.getValue().giveAttackOrder(((GameState) this.handler).attackPosition);

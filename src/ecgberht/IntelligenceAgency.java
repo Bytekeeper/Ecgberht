@@ -1,9 +1,11 @@
 package ecgberht;
 
+import bwem.Base;
 import bwem.unit.Mineral;
-import ecgberht.Strategies.BioMechFE;
 import ecgberht.Strategies.FullBio;
 import ecgberht.Strategies.FullBioFE;
+import ecgberht.Strategies.FullMech;
+import ecgberht.Strategies.MechGreedyFE;
 import org.openbw.bwapi4j.Bullet;
 import org.openbw.bwapi4j.Player;
 import org.openbw.bwapi4j.type.Race;
@@ -17,16 +19,16 @@ import static ecgberht.Ecgberht.getGs;
 
 public class IntelligenceAgency {
 
-    static Map<Player, TreeSet<EnemyBuilding>> enemyBases = new HashMap<>();
-    static Map<Player, HashSet<UnitType>> enemyTypes = new HashMap<>();
+    static Map<Player, TreeSet<EnemyBuilding>> enemyBases;
+    static Map<Player, HashSet<UnitType>> enemyTypes;
     private static Player mainEnemy;
-    private static Set<Unit> enemyWorkers = new TreeSet<>();
-    private static List<Bullet> enemyBullets = new ArrayList<>();
-    private static List<Bullet> allyBullets = new ArrayList<>();
+    private static Set<Unit> enemyWorkers;
+    private static List<Bullet> enemyBullets;
+    private static List<Bullet> allyBullets;
     private static EnemyStrats enemyStrat = EnemyStrats.Unknown;
     private static String startStrat = null;
     private static boolean exploredMinerals = false;
-    private static Map<UnitType, Integer> mainEnemyUnitTypeAmount = new HashMap<>();
+    private static Map<UnitType, Integer> mainEnemyUnitTypeAmount;
 
     private static int getNumEnemyWorkers() {
         return enemyWorkers.size();
@@ -50,6 +52,7 @@ public class IntelligenceAgency {
         enemyStrat = EnemyStrats.Unknown;
         startStrat = null;
         exploredMinerals = false;
+        mainEnemyUnitTypeAmount = new HashMap<>();
     }
 
     public static EnemyStrats getEnemyStrat() {
@@ -115,7 +118,12 @@ public class IntelligenceAgency {
         if (type.isResourceDepot()) {
             // If base and player known skip
             if (enemyBases.containsKey(player) && enemyBases.get(player).contains(new EnemyBuilding(unit))) return;
-            enemyBases.get(player).add(new EnemyBuilding(unit));
+            for(Base b : getGs().BLs){
+                if(b.getLocation().equals(unit.getTilePosition())){
+                    enemyBases.get(player).add(new EnemyBuilding(unit));
+                    break;
+                }
+            }
         }
         // If player and type known skip
         if (enemyTypes.containsKey(player) && enemyTypes.get(player).contains(type)) return;
@@ -225,10 +233,10 @@ public class IntelligenceAgency {
                 getGs().ih.sendText("Nice Mech strat you got there");
                 getGs().playSound("rushed.mp3");
                 if (getGs().strat.name.equals("BioGreedyFE")) {
-                    getGs().strat = new BioMechFE();
+                    getGs().strat = new MechGreedyFE();
                     Ecgberht.transition();
                 } else if (getGs().strat.name.equals("FullBio") || getGs().strat.name.equals("FullBioFE")) {
-                    getGs().strat = new BioMechFE();
+                    getGs().strat = new FullMech();
                     Ecgberht.transition();
                 }
                 return true;
@@ -306,6 +314,7 @@ public class IntelligenceAgency {
     private static boolean detectCannonRush() {
         if (getGs().frameCount < 24 * 210 && getGs().enemyStartBase != null) {
             boolean foundForge = false;
+            boolean foundGas = enemyHasType(UnitType.Protoss_Assimilator);
             if (exploredMinerals) {
                 for (EnemyBuilding u : getGs().enemyBuildingMemory.values()) {
                     if (u.type == UnitType.Protoss_Forge && getGs().bwem.getMap().getArea(u.pos).equals(getGs().enemyMainArea)) {
@@ -323,16 +332,16 @@ public class IntelligenceAgency {
                     break;
                 }
             }
-            if (foundForge || somethingInMyBase) {
+            if ((foundForge && !foundGas) || somethingInMyBase) {
                 enemyStrat = EnemyStrats.CannonRush;
                 getGs().ih.sendText("Cannon rusher T_T");
                 getGs().playSound("rushed.mp3");
                 if (getGs().strat.name.equals("BioGreedyFE") || getGs().strat.name.equals("MechGreedyFE")) {
-                    getGs().strat = new FullBio();
+                    getGs().strat = new FullMech();
                     getGs().defendPosition = getGs().mainChoke.getCenter().toPosition();
                     Ecgberht.transition();
                 } else if (getGs().strat.name.equals("BioMech") || getGs().strat.name.equals("BioMechFE")) {
-                    getGs().strat = new FullBioFE();
+                    getGs().strat = new FullMech();
                     getGs().defendPosition = getGs().mainChoke.getCenter().toPosition();
                     Ecgberht.transition();
                 }
@@ -347,6 +356,11 @@ public class IntelligenceAgency {
             if (!getGs().getGame().getBWMap().isExplored(m.getUnit().getTilePosition())) return false;
         }
         return true;
+    }
+
+    public static boolean enemyIsRushing() {
+        return getGs().frameCount <= 24 * 500 && (enemyStrat == EnemyStrats.ZealotRush
+                || enemyStrat == EnemyStrats.EarlyPool || enemyStrat == EnemyStrats.CannonRush);
     }
 
     public enum EnemyStrats {Unknown, EarlyPool, ZealotRush, CannonRush, MechRush}
