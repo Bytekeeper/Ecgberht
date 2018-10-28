@@ -40,7 +40,6 @@ import ecgberht.Util.Util;
 import org.iaie.btree.BehavioralTree;
 import org.iaie.btree.task.composite.Selector;
 import org.iaie.btree.task.composite.Sequence;
-import org.iaie.btree.util.GameHandler;
 import org.openbw.bwapi4j.*;
 import org.openbw.bwapi4j.type.Race;
 import org.openbw.bwapi4j.type.TechType;
@@ -79,6 +78,8 @@ public class Ecgberht implements BWEventListener {
     private boolean first = false;
     private Player self;
     private BWEM bwem = null;
+    private DebugManager debugManager = null;
+    private CameraModule skycladObserver = null;
 
     public static void main(String[] args) {
         new Ecgberht().run();
@@ -113,7 +114,7 @@ public class Ecgberht implements BWEventListener {
         ChooseWraith cWra = new ChooseWraith("Choose Wraith", gs);
         CheckResourcesUnit cr = new CheckResourcesUnit("Check Cash", gs);
         TrainUnit tr = new TrainUnit("Train Unit", gs);
-        Selector<GameHandler> chooseUnit = new Selector<>("Choose Recruit", cNT, cSU, cSCV);
+        Selector chooseUnit = new Selector("Choose Recruit", cNT, cSU, cSCV);
         if (gs.strat.trainUnits.contains(UnitType.Terran_Goliath)) chooseUnit.addChild(cGol);
         if (gs.strat.trainUnits.contains(UnitType.Terran_Siege_Tank_Tank_Mode)) chooseUnit.addChild(cTan);
         if (gs.strat.trainUnits.contains(UnitType.Terran_Vulture)) chooseUnit.addChild(cVul);
@@ -147,7 +148,7 @@ public class Ecgberht implements BWEventListener {
         ChoosePosition cp = new ChoosePosition("Choose Position", gs);
         ChooseWorker cw = new ChooseWorker("Choose Worker", gs);
         Move m = new Move("Move to chosen building position", gs);
-        Selector<GameHandler> chooseBuildingBuild = new Selector<>("Choose Building to build", cNB, cE, cBun, cSup);
+        Selector chooseBuildingBuild = new Selector("Choose Building to build", cNB, cE, cBun, cSup);
         //chooseBuildingBuild.addChild(cBun);
         chooseBuildingBuild.addChild(cTur);
         chooseBuildingBuild.addChild(cRef);
@@ -179,7 +180,7 @@ public class Ecgberht implements BWEventListener {
         ChooseSiegeMode cSM = new ChooseSiegeMode("Choose Siege Mode", gs);
         ChooseCharonBoosters cCB = new ChooseCharonBoosters("Choose Charon Boosters", gs);
         ResearchUpgrade rU = new ResearchUpgrade("Research Upgrade", gs);
-        Selector<GameHandler> ChooseUP = new Selector<>("Choose Upgrade");
+        Selector ChooseUP = new Selector("Choose Upgrade");
         ChooseUP.addChild(cI);
         ChooseUP.addChild(cEMP);
         if (gs.strat.upgradesToResearch.contains(UpgradeType.Terran_Infantry_Weapons)) ChooseUP.addChild(cWIU);
@@ -201,7 +202,7 @@ public class Ecgberht implements BWEventListener {
         ChooseComsatStation cCS = new ChooseComsatStation("Choose Comsat Station", gs);
         ChooseMachineShop cMS = new ChooseMachineShop("Choose Machine Shop", gs);
         ChooseTower cT = new ChooseTower("Choose Control Tower", gs);
-        Selector<GameHandler> ChooseAddon = new Selector<>("Choose Addon");
+        Selector ChooseAddon = new Selector("Choose Addon");
         if (gs.strat.buildAddons.contains(UnitType.Terran_Machine_Shop)) ChooseAddon.addChild(cMS);
         if (gs.strat.buildAddons.contains(UnitType.Terran_Comsat_Station)) ChooseAddon.addChild(cCS);
         if (gs.strat.buildAddons.contains(UnitType.Terran_Control_Tower)) ChooseAddon.addChild(cT);
@@ -242,9 +243,9 @@ public class Ecgberht implements BWEventListener {
         CheckVisibleBase cVB = new CheckVisibleBase("Check visible Base", gs);
         CheckEnemyBaseVisible cEBV = new CheckEnemyBaseVisible("Check Enemy Base Visible", gs);
         Sequence scoutFalse = new Sequence("Scout ", cSc, chSc, sSc);
-        Selector<GameHandler> EnemyFound = new Selector<>("Enemy found in base location", cEBV, sSc);
+        Selector EnemyFound = new Selector("Enemy found in base location", cEBV, sSc);
         Sequence scoutTrue = new Sequence("Scout True", cVB, EnemyFound);
-        Selector<GameHandler> Scouting = new Selector<>("Select Scouting Plan", scoutFalse, scoutTrue);
+        Selector Scouting = new Selector("Select Scouting Plan", scoutFalse, scoutTrue);
         scoutingTree = new BehavioralTree("Movement Tree");
         scoutingTree.addChild(Scouting);
     }
@@ -303,10 +304,10 @@ public class Ecgberht implements BWEventListener {
         ChooseBuildingToHarass cBTH = new ChooseBuildingToHarass("Check Building to Harass", gs);
         Explore E = new Explore("Explore", gs);
         HarassWorker hW = new HarassWorker("Bother SCV", gs);
-        Selector<GameHandler> bOw = new Selector<>("Choose Builder or Worker or Building", cWTH, cWTB, cBTH);
+        Selector bOw = new Selector("Choose Builder or Worker or Building", cWTH, cWTB, cBTH);
         Sequence harassAttack = new Sequence("Harass", cHA, bOw, hW);
         Sequence explorer = new Sequence("Explorer", cE, E);
-        Selector<GameHandler> eOh = new Selector<>("Explorer or harasser", explorer, harassAttack);
+        Selector eOh = new Selector("Explorer or harasser", explorer, harassAttack);
         Sequence harass = new Sequence("Harass", cH, eOh);
         botherTree = new BehavioralTree("Harass Tree");
         botherTree.addChild(harass);
@@ -316,7 +317,7 @@ public class Ecgberht implements BWEventListener {
         CollectGas cg = new CollectGas("Collect Gas", gs);
         CollectMineral cm = new CollectMineral("Collect Mineral", gs);
         FreeWorker fw = new FreeWorker("No Union", gs);
-        Selector<GameHandler> collectResources = new Selector<>("Collect Melted Cash", cg, cm);
+        Selector collectResources = new Selector("Collect Melted Cash", cg, cm);
         Sequence collect = new Sequence("Collect", fw, collectResources);
         collectTree = new BehavioralTree("Recollection Tree");
         collectTree.addChild(collect);
@@ -339,6 +340,7 @@ public class Ecgberht implements BWEventListener {
             }
             self = bw.getInteractionHandler().self();
             ih = bw.getInteractionHandler();
+            debugManager = new DebugManager(bw.getMapDrawer(), bw.getInteractionHandler());
             IntelligenceAgency.onStartIntelligenceAgency(ih.enemy());
             if (!ConfigManager.getConfig().ecgConfig.enableLatCom) ih.enableLatCom(false);
             else ih.enableLatCom(true);
@@ -356,11 +358,9 @@ public class Ecgberht implements BWEventListener {
             bwem.getMap().assignStartingLocationsToSuitableBases();
             gs = new GameState(bw, bwem);
             gs.initEnemyRace();
-            gs.readOpponentInfo();
-            gs.readOpponentHistory();
-            if (gs.EI.race == null) gs.EI.race = Util.raceToString(bw.getInteractionHandler().enemy().getRace());
+            gs.learningManager.onStart(ih.enemy().getName(), Util.raceToString(bw.getInteractionHandler().enemy().getRace()));
             gs.alwaysPools();
-            if (gs.enemyRace == Race.Zerg && gs.EI.naughty) gs.playSound("rushed.mp3");
+            if (gs.enemyRace == Race.Zerg && gs.learningManager.isNaughty()) gs.playSound("rushed.mp3");
             gs.strat = gs.initStrat();
             gs.updateStrat();
             IntelligenceAgency.setStartStrat(gs.strat.name);
@@ -397,9 +397,9 @@ public class Ecgberht implements BWEventListener {
             initBunkerTree();
             initScanTree();
             initHarassTree();
-            initIslandTree(); // TODO uncomment when BWAPI client island bug is fixed
-            gs.skycladObserver = new CameraModule(self.getStartLocation(), bw);
-            if (ConfigManager.getConfig().ecgConfig.enableSkyCladObserver) gs.skycladObserver.toggle();
+            initIslandTree();
+            skycladObserver = new CameraModule(self.getStartLocation(), bw);
+            if (ConfigManager.getConfig().ecgConfig.enableSkyCladObserver) skycladObserver.toggle();
         } catch (Exception e) {
             System.err.println("onStart Exception");
             e.printStackTrace();
@@ -411,7 +411,7 @@ public class Ecgberht implements BWEventListener {
     public void onFrame() {
         try {
             gs.frameCount = ih.getFrameCount();
-            gs.skycladObserver.onFrame();
+            skycladObserver.onFrame();
             if (gs.frameCount == 1500) gs.sendCustomMessage();
             if (gs.frameCount == 2300) gs.sendRandomMessage();
             if (gs.frameCount == 1000 && bw.getBWMap().mapHash().equals("69a3b6a5a3d4120e47408defd3ca44c954997948")) {
@@ -460,7 +460,7 @@ public class Ecgberht implements BWEventListener {
             repairTree.run();
             collectTree.run();
             upgradeTree.run();
-            islandTree.run(); // TODO uncomment when BWAPI island bug is fixed
+            islandTree.run();
             buildTree.run();
             addonBuildTree.run();
             trainTree.run();
@@ -476,8 +476,7 @@ public class Ecgberht implements BWEventListener {
             gs.sqManager.updateSquadOrderAndMicro();
             gs.checkMainEnemyBase();
             if (gs.frameCount > 0 && gs.frameCount % 5 == 0) gs.mineralLocking();
-            gs.debugScreen();
-            gs.debugText();
+            debugManager.onFrame(gs);
         } catch (Exception e) {
             System.err.println("onFrame Exception");
             e.printStackTrace();
@@ -488,21 +487,13 @@ public class Ecgberht implements BWEventListener {
     public void onEnd(boolean arg0) {
         try {
             String name = ih.enemy().getName();
+            if (arg0) ih.sendText("gg wp " + name);
+            else ih.sendText("gg wp! " + name + ", next game I will not lose!");
             if (bw.getBWMap().mapHash().equals("6f5295624a7e3887470f3f2e14727b1411321a67"))
                 gs.strat.name = "PlasmaWraithHell";
             String oldStrat = IntelligenceAgency.getStartStrat();
             if (oldStrat != null && !oldStrat.equals(gs.strat.name)) gs.strat.name = oldStrat;
-            gs.EI.updateStrategyOpponentHistory(gs.strat.name, gs.mapSize, arg0);
-            gs.EH.history.add(new EnemyHistory.EnemyGame(name, gs.enemyRace, arg0, gs.strat.name, bw.getBWMap().mapFileName().replace(".scx", "")));
-            if (arg0) {
-                gs.EI.wins++;
-                ih.sendText("gg wp " + name);
-            } else {
-                gs.EI.losses++;
-                ih.sendText("gg wp! " + name + ", next game I will not lose!");
-            }
-            gs.writeOpponentInfo(name);
-            gs.writeOpponentHistory(name);
+            gs.learningManager.onEnd(gs.strat.name, gs.mapSize, arg0, name, gs.enemyRace, bw.getBWMap().mapFileName().replace(".scx", ""), gs.enemyIsRandom);
         } catch (Exception e) {
             System.err.println("onEnd Exception");
             e.printStackTrace();
@@ -531,7 +522,7 @@ public class Ecgberht implements BWEventListener {
 
     @Override
     public void onSendText(String arg0) {
-        gs.keyboardInteraction(arg0);
+        debugManager.keyboardInteraction(arg0, skycladObserver);
     }
 
     @Override
@@ -557,7 +548,7 @@ public class Ecgberht implements BWEventListener {
                                 transition();
                             }
                         }
-                        if (arg0 instanceof Bunker && gs.EI.naughty && gs.enemyRace == Race.Zerg) {
+                        if (arg0 instanceof Bunker && gs.learningManager.isNaughty() && gs.enemyRace == Race.Zerg) {
                             gs.defendPosition = arg0.getPosition();
                         }
                         SCV worker = (SCV) ((Building) arg0).getBuildUnit();
@@ -588,7 +579,7 @@ public class Ecgberht implements BWEventListener {
                     || arg0 instanceof Critter || arg0 instanceof ScannerSweep) {
                 return;
             }
-            gs.skycladObserver.moveCameraUnitCompleted(arg0);
+            skycladObserver.moveCameraUnitCompleted(arg0);
             PlayerUnit pU = (PlayerUnit) arg0;
             UnitType type = arg0.getType();
             if (!type.isNeutral() && pU.getPlayer().getId() == self.getId()) {
@@ -669,7 +660,7 @@ public class Ecgberht implements BWEventListener {
                     } else {
                         gs.myArmy.add(arg0);
                         if (!gs.strat.name.equals("ProxyBBS")) {
-                            if (!gs.strat.name.equals("EightRax") && (!gs.EI.naughty || gs.enemyRace != Race.Zerg)) {
+                            if (!gs.strat.name.equals("EightRax") && (!gs.learningManager.isNaughty() || gs.enemyRace != Race.Zerg)) {
                                 if (!gs.DBs.isEmpty()) {
                                     ((MobileUnit) arg0).attack(gs.DBs.keySet().iterator().next().getPosition());
                                 } else if (gs.mainChoke != null) {
@@ -859,7 +850,6 @@ public class Ecgberht implements BWEventListener {
                             gs.myArmy.addAll(gs.DBs.get(arg0));
                             gs.DBs.remove(arg0);
                         }
-                        // TODO test
                         if (type.isRefinery() && gs.refineriesAssigned.containsKey(arg0)) {
                             List<Unit> aux = new ArrayList<>();
                             for (Entry<Worker, GasMiningFacility> w : gs.workerGas.entrySet()) {
@@ -899,7 +889,6 @@ public class Ecgberht implements BWEventListener {
     public void onUnitMorph(Unit arg0) {
         try {
             UnitType type = arg0.getType();
-            // TODO VespeneGeyser morphs
             if (arg0 instanceof PlayerUnit && Util.isEnemy(((PlayerUnit) arg0).getPlayer())
                     && arg0 instanceof Building
                     && !(arg0 instanceof GasMiningFacility) && !gs.enemyBuildingMemory.containsKey(arg0)) {

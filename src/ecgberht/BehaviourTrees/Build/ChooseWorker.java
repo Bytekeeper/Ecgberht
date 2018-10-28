@@ -1,15 +1,14 @@
 package ecgberht.BehaviourTrees.Build;
 
 import ecgberht.GameState;
-import org.iaie.btree.state.State;
+import org.iaie.btree.BehavioralTree.State;
 import org.iaie.btree.task.leaf.Action;
-import org.iaie.btree.util.GameHandler;
 import org.openbw.bwapi4j.Position;
 import org.openbw.bwapi4j.unit.Worker;
 
 public class ChooseWorker extends Action {
 
-    public ChooseWorker(String name, GameHandler gh) {
+    public ChooseWorker(String name, GameState gh) {
         super(name, gh);
 
     }
@@ -18,30 +17,25 @@ public class ChooseWorker extends Action {
     public State execute() {
         try {
             Worker closestWorker = null;
-            int frame = ((GameState) this.handler).frameCount;
-            Position chosen = ((GameState) this.handler).chosenPosition.toPosition();
-            if (!((GameState) this.handler).workerIdle.isEmpty()) {
-                for (Worker u : ((GameState) this.handler).workerIdle) {
-                    if (u.getLastCommandFrame() == frame) {
-                        continue;
-                    }
-                    if ((closestWorker == null || u.getDistance(chosen) < closestWorker.getDistance(chosen))) {
+            int frame = this.handler.frameCount;
+            Position chosen = this.handler.chosenPosition.toPosition();
+            if (!this.handler.workerIdle.isEmpty()) {
+                for (Worker u : this.handler.workerIdle) {
+                    if (u.getLastCommandFrame() == frame) continue;
+                    if ((closestWorker == null || u.getDistance(chosen) < closestWorker.getDistance(chosen)))
                         closestWorker = u;
-                    }
                 }
             }
-            if (!((GameState) this.handler).workerMining.isEmpty()) {
-                for (Worker u : ((GameState) this.handler).workerMining.keySet()) {
-                    if (u.getLastCommandFrame() == frame) {
-                        continue;
-                    }
+            if (!this.handler.workerMining.isEmpty()) {
+                for (Worker u : this.handler.workerMining.keySet()) {
+                    if (u.getLastCommandFrame() == frame) continue;
                     if ((closestWorker == null || u.getDistance(chosen) < closestWorker.getDistance(chosen)) && !u.isCarryingMinerals()) {
                         closestWorker = u;
                     }
                 }
             }
             if (closestWorker != null) {
-                ((GameState) this.handler).chosenWorker = closestWorker;
+                this.handler.chosenWorker = closestWorker;
                 return State.SUCCESS;
             }
             return State.FAILURE;

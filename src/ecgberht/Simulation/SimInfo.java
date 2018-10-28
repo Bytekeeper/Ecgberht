@@ -14,10 +14,10 @@ public class SimInfo {
     public SimType type = SimType.MIX;
     public Set<Unit> allies = new TreeSet<>();
     public Set<Unit> enemies = new TreeSet<>();
-    public MutablePair<Integer, Integer> preSimScore;
-    public MutablePair<Integer, Integer> postSimScore;
-    public MutablePair<Collection<Agent>, Collection<Agent>> stateBefore = new MutablePair<>(new ArrayList<>(), new ArrayList<>());
-    public MutablePair<Collection<Agent>, Collection<Agent>> stateAfter = new MutablePair<>(new TreeSet<>(), new TreeSet<>());
+    MutablePair<Integer, Integer> preSimScore;
+    MutablePair<Integer, Integer> postSimScore;
+    MutablePair<Collection<Agent>, Collection<Agent>> stateBefore = new MutablePair<>(new ArrayList<>(), new ArrayList<>());
+    MutablePair<Collection<Agent>, Collection<Agent>> stateAfter = new MutablePair<>(new TreeSet<>(), new TreeSet<>());
     public boolean lose = false;
 
     public enum SimType {GROUND, AIR, MIX}
