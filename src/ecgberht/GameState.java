@@ -129,14 +129,14 @@ public class GameState {
     public Worker chosenHarasser = null;
     public Worker chosenWorker = null;
     public Worker chosenWorkerDrop = null;
-    public boolean firstExpand = true;
+    boolean firstExpand = true;
     public int maxGoliaths = 0;
     public double luckyDraw;
     public List<TilePosition> fortressSpecialBLsTiles = new ArrayList<>(Arrays.asList(new TilePosition(7, 7),
             new TilePosition(117, 7), new TilePosition(7, 118), new TilePosition(117, 118)));
     public Building disrupterBuilding = null;
     public BW bw;
-    public InteractionHandler ih;
+    InteractionHandler ih;
     public BWEM bwem;
     protected Player self;
     Set<String> shipNames = new TreeSet<>(Arrays.asList("Adriatic", "Aegis Fate", "Agincourt", "Allegiance",
@@ -334,9 +334,20 @@ public class GameState {
             }
 
             int totalGamesPlayed = EI.wins + EI.losses;
-            if (enemyName.equals("saida") && totalGamesPlayed == 1) return bbs;
             if (totalGamesPlayed < 1) {
                 ih.sendText("I dont know you that well yet, lets pick the standard strategy");
+                switch(enemyRace){
+                    case Zerg:
+                        return bFE;
+                    case Terran:
+                        return FM;
+                    case Protoss:
+                        return bM;
+                    case Random:
+                        return b;
+                    case Unknown:
+                        return b;
+                }
                 return b;
             }
             for (LearningManager.EnemyInfo.StrategyOpponentHistory r : EI.history) {
@@ -606,7 +617,7 @@ public class GameState {
         }
         for (Worker u : removeGas) workerGas.remove(u);
 
-        if (frameCount % 500 == 0) {
+        if (frameCount % 350 == 0) {
             Map<MineralPatch, Long> mineralCount = workerMining.values().stream().collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
             for (Entry<MineralPatch, Long> p : mineralCount.entrySet())
                 mineralsAssigned.put(p.getKey(), Math.toIntExact(p.getValue()));
@@ -979,7 +990,6 @@ public class GameState {
                     if (count <= workerCountToSustain) break;
                     if (!scv.getKey().isCarryingMinerals()) {
                         scv.getKey().move(new TilePosition(bw.getBWMap().mapWidth() / 2, bw.getBWMap().mapHeight() / 2).toPosition());
-                        //addToSquad(scv.getKey());
                         myArmy.add(scv.getKey());
                         if (mineralsAssigned.containsKey(scv.getValue())) {
                             mining--;
@@ -1064,14 +1074,23 @@ public class GameState {
 
     void sendCustomMessage() {
         LearningManager.EnemyInfo EI = learningManager.getEnemyInfo();
-        String name = EI.opponent.toLowerCase();
-        if (name.equals("saida") && EI.losses + EI.wins == 1) ih.sendText("Omae wa mou shindeiru");
-        else if (name.equals("krasi0".toLowerCase())) ih.sendText("Please don't bully me too much!");
-        else if (name.equals("hannes bredberg".toLowerCase()) || name.equals("hannesbredberg".toLowerCase())) {
-            ih.sendText("Don't you dare nuke me!");
-        } else if (name.equals("zercgberht")) {
-            ih.sendText("Hello there!, brother");
-        } else ih.sendText("BEEEEP BOOOOP!, This king salutes you, " + EI.opponent);
+        String name = EI.opponent.toLowerCase().replace(" ", "");
+        switch (name) {
+            case "krasi0":
+                ih.sendText("Please don't bully me too much!");
+                break;
+            case "hannesbredberg":
+                ih.sendText("Don't you dare nuke me!");
+                break;
+            case "zercgberht":
+            case "assberht":
+            case "protecgberht":
+                ih.sendText("Hello there!, brother");
+                break;
+            default:
+                ih.sendText("BEEEEP BOOOOP!, This king salutes you, " + EI.opponent);
+                break;
+        }
     }
 
     String pickShipName() {
@@ -1235,6 +1254,26 @@ public class GameState {
         if (disrupterBuilding.getHitPoints() <= 20) {
             disrupterBuilding.cancelConstruction();
             disrupterBuilding = null;
+        }
+    }
+
+    void cancelDyingThings() { // TODO test
+        List<SCV> toRemove = new ArrayList<>();
+        for(Entry<SCV, Building> b : workerTask.entrySet()){
+            if (b.getValue().isCompleted()) continue; // Is this even needed??
+            if (b.getValue().isUnderAttack() && b.getValue().getHitPoints() <= 20){
+                b.getKey().haltConstruction();
+                buildingLot.add(b.getValue());
+                toRemove.add(b.getKey());
+            }
+        }
+        for(SCV s : toRemove){
+            workerIdle.add(s);
+            workerBuild.remove(s);
+        }
+        for(Building b : buildingLot) {
+            if (b.isCompleted()) continue; // Is this even needed??
+            if (b.isUnderAttack() && b.getHitPoints() <= 20) b.cancelConstruction();
         }
     }
 }
