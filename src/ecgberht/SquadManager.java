@@ -1,7 +1,10 @@
 package ecgberht;
 
-import ecgberht.Clustering.Cluster;
+import ecgberht.Clustering.ClusterInfo;
 import ecgberht.Simulation.SimInfo;
+import java.util.Collection;
+import java.util.TreeSet;
+import org.bk.ass.cluster.Cluster;
 import org.openbw.bwapi4j.Position;
 import org.openbw.bwapi4j.unit.Bunker;
 import org.openbw.bwapi4j.unit.Marine;
@@ -17,11 +20,12 @@ import static ecgberht.Ecgberht.getGs;
 public class SquadManager {
     public Map<Integer, Squad> squads = new TreeMap<>();
 
-    public void createSquads(List<Cluster> friendly) {
+    public void createSquads(Collection<Cluster<Unit>> friendly) {
         squads.clear();
         int counter = 0;
         for (Cluster c : friendly) {
-            Squad s = new Squad(counter, c.units, new Position((int) c.modeX, (int) c.modeY));
+            ClusterInfo ci = (ClusterInfo) c.getUserObject();
+            Squad s = new Squad(counter, new TreeSet<>(c.getElements()), new Position((int) ci.modeX, (int) ci.modeY));
             squads.put(counter, s);
             counter++;
         }
