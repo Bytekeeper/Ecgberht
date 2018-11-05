@@ -1,6 +1,5 @@
 package ecgberht.Simulation;
 
-import ecgberht.Clustering.Cluster;
 import ecgberht.Clustering.ClusterInfo;
 import ecgberht.Util.MutablePair;
 import java.util.ArrayList;
