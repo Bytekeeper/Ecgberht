@@ -9,13 +9,8 @@ import ecgberht.IntelligenceAgency;
 import ecgberht.Util.ColorUtil;
 import ecgberht.Util.MutablePair;
 import ecgberht.Util.Util;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
-import java.util.function.ToIntFunction;
 import org.bk.ass.Agent;
 import org.bk.ass.BWAPI4JAgentFactory;
 import org.bk.ass.Evaluator;
@@ -26,55 +21,43 @@ import org.bk.ass.query.PositionAndId;
 import org.bk.ass.query.UnitFinder;
 import org.openbw.bwapi4j.BW;
 import org.openbw.bwapi4j.Position;
-import org.openbw.bwapi4j.type.Color;
-import org.openbw.bwapi4j.type.Order;
-import org.openbw.bwapi4j.type.TechType;
-import org.openbw.bwapi4j.type.UnitType;
-import org.openbw.bwapi4j.type.WeaponType;
-import org.openbw.bwapi4j.unit.AirAttacker;
-import org.openbw.bwapi4j.unit.Attacker;
-import org.openbw.bwapi4j.unit.Building;
-import org.openbw.bwapi4j.unit.Bunker;
-import org.openbw.bwapi4j.unit.ComsatStation;
-import org.openbw.bwapi4j.unit.DarkTemplar;
-import org.openbw.bwapi4j.unit.Egg;
-import org.openbw.bwapi4j.unit.Firebat;
-import org.openbw.bwapi4j.unit.Goliath;
-import org.openbw.bwapi4j.unit.GroundAttacker;
-import org.openbw.bwapi4j.unit.Lurker;
-import org.openbw.bwapi4j.unit.Marine;
-import org.openbw.bwapi4j.unit.Medic;
-import org.openbw.bwapi4j.unit.MobileUnit;
-import org.openbw.bwapi4j.unit.PlayerUnit;
-import org.openbw.bwapi4j.unit.SCV;
-import org.openbw.bwapi4j.unit.SiegeTank;
-import org.openbw.bwapi4j.unit.Unit;
-import org.openbw.bwapi4j.unit.Vulture;
-import org.openbw.bwapi4j.unit.Worker;
-import org.openbw.bwapi4j.unit.Wraith;
+import org.openbw.bwapi4j.type.*;
+import org.openbw.bwapi4j.unit.*;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.function.ToIntFunction;
+
+import static ecgberht.Ecgberht.getGs;
 
 public class SimManager {
 
-  public long time;
-  private Collection<Cluster<Unit>> friendly = new ArrayList<>();
-  private Collection<Cluster<Unit>> enemies = new ArrayList<>();
-  private List<SimInfo> simulations = new ArrayList<>();
-  private Simulator simulator;
-  private Evaluator evaluator;
-  private double radius = UnitType.Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange();
-  private int longSimFrames = 300;
-  private BWAPI4JAgentFactory factory;
-  private StableDBScanner<Unit> myClusters = new StableDBScanner<>(3);
-  private StableDBScanner<Unit> enemyClusters = new StableDBScanner<>(3);
-  public static final Function<Unit, PositionAndId> POSITION_AND_ID_EXTRACTOR = u -> new PositionAndId(
+    public long time;
+    private Collection<Cluster<Unit>> friendly = new ArrayList<>();
+    private Collection<Cluster<Unit>> enemies = new ArrayList<>();
+    private List<SimInfo> simulations = new ArrayList<>();
+    private Simulator Assmulator;
+    private BWAPI4JAgentFactory factory;
+    private Evaluator evaluator;
+    private double radius = UnitType.Terran_Siege_Tank_Siege_Mode.groundWeapon().maxRange();
+    private int shortSimFrames = 90;
+    private int longSimFrames = 300;
+    private int iterations = 10;
+    private StableDBScanner<Unit> myClusters = new StableDBScanner<>(3);
+    private StableDBScanner<Unit> enemyClusters = new StableDBScanner<>(3);
+    public static final Function<Unit, PositionAndId> POSITION_AND_ID_EXTRACTOR = u -> new PositionAndId(
       u.getId(),
       u.getX(), u.getY());
 
   public SimManager(BW bw) {
-    simulator = new Simulator();
+    Assmulator = new Simulator();
     evaluator = new Evaluator();
     factory = new BWAPI4JAgentFactory(bw.getBWMap());
-    if (ConfigManager.getConfig().ecgConfig.sscait) {
+    Assmulator = new Simulator();
+        evaluator = new Evaluator();
+        factory = new BWAPI4JAgentFactory(bw.getBWMap());if (ConfigManager.getConfig().ecgConfig.sscait) {
       longSimFrames = 220;
     }
     switch (bw.getInteractionHandler().enemy().getRace()) {
@@ -130,26 +113,8 @@ public class SimManager {
   private void reset() {
     friendly.clear();
     enemies.clear();
-    simulator.reset();
+    Assmulator.reset();
     simulations.clear();
-  }
-
-  private MutablePair<Integer, Integer> scores() {
-    ToIntFunction<Agent> score = a -> {
-      PlayerUnit unit = (PlayerUnit) a.getUserObject();
-      if (unit == null) {
-        return 0;
-      }
-      UnitType unitType = unit.getType();
-      int result = (unitType.destroyScore() * (a.getHealth() * 3 + a.getShields() + 1)) / (
-          (unitType.maxHitPoints() * 3) + unitType.maxShields());
-      if (unitType == UnitType.Terran_Bunker) {
-        result += UnitType.Terran_Marine.destroyScore() * 4;
-      }
-      return result;
-    };
-    return new MutablePair<>(simulator.getAgentsA().stream().mapToInt(score).sum(),
-        simulator.getAgentsB().stream().mapToInt(score).sum());
   }
 
   /**
@@ -177,9 +142,9 @@ public class SimManager {
       }
       enemyUnits.add(u);
     }
-    for (Unit u : getGs().enemyBuildingMemory.keySet()) {
-      if (u instanceof Attacker || u instanceof Bunker) {
-        enemyUnits.add(u);
+    for (EnemyBuilding u : getGs().enemyBuildingMemory.values()) {
+      if (Util.isStaticDefense(u.unit) || u.unit.isVisible()) {
+        enemyUnits.add(u.unit);
       }
     }
     UnitFinder<Unit> enemyUnitFinder = new UnitFinder<>(enemyUnits, POSITION_AND_ID_EXTRACTOR);
@@ -207,7 +172,7 @@ public class SimManager {
         return false;
       }
       if (u instanceof SCV && (getGs().strat.name.equals("ProxyBBS") || getGs().strat.name
-          .equals("EightRax"))) {
+          .equals("ProxyEightRax"))) {
         return true;
       }
       if (u instanceof MobileUnit && ((MobileUnit) u).getTransport() != null) {
@@ -222,24 +187,25 @@ public class SimManager {
     }
   }
 
-  /**
-   * Main method that runs every frame If needed creates the clusters and SimInfos and run the
-   * simulations on them
-   */
-  public void onFrameSim() {
-    time = System.currentTimeMillis();
-    updateRadius();
-    reset();
-    createClusters();
-    if (!friendly.isEmpty()) {
-      getGs().sqManager.createSquads(friendly);
-      createSimInfos();
-      if (!noNeedForSim()) {
-        doSim();
-      }
+    /**
+     * Main method that runs every frame
+     * If needed creates the clusters and SimInfos and run the simulations on them
+     */
+    public void onFrameSim() {
+        time = System.currentTimeMillis();
+        updateRadius();
+        reset();
+        createClusters();
+        if (!friendly.isEmpty()) {
+            //getGs().sqManager.createSquads(friendly);
+            createSimInfos();
+            getGs().sqManager.createSquads(friendly);
+            if (!noNeedForSim()) {
+                doSimASS();
+            }
+        }
+        time = System.currentTimeMillis() - time;
     }
-    time = System.currentTimeMillis() - time;
-  }
 
   /**
    * Checks if there is no need to do extra work simulating, useful to save cpu power
@@ -260,7 +226,7 @@ public class SimManager {
       }
     }
     for (EnemyBuilding u : getGs().enemyBuildingMemory.values()) {
-      if (u.unit instanceof Attacker && getGs().getGame().getBWMap().isVisible(u.pos)) {
+      if (u.unit instanceof Attacker && u.unit.isVisible()) {
         return false;
       }
     }
@@ -268,8 +234,8 @@ public class SimManager {
   }
 
   private boolean closeClusters(ClusterInfo c1, ClusterInfo c2) {
-    return Util.broodWarDistance(c1.mode(), c2.mode()) <= radius + (Math
-        .max(c1.maxDistFromCenter, c2.maxDistFromCenter));
+    return Util.broodWarDistance(c1.mode(), c2.mode()) <= radius + Math
+        .max(c1.maxDistFromCenter, c2.maxDistFromCenter);
   }
 
   /**
@@ -280,7 +246,7 @@ public class SimManager {
       if (friend.getElements().isEmpty()) {
         continue;
       }
-      SimInfo aux = new SimInfo();
+      SimInfo aux = new SimInfo((ClusterInfo) friend.getUserObject());
       for (Cluster<Unit> enemy : enemies) {
         if (enemy.getElements().isEmpty()) {
           continue;
@@ -294,34 +260,24 @@ public class SimManager {
                 aux.allies.addAll(friend.units);
                 simulations.add(aux);
             }*/
-      aux.allies.addAll(friend.getElements());
-      simulations.add(aux);
-    }
-    List<SimInfo> newSims = new ArrayList<>();
-    for (SimInfo s : simulations) {
-      SimInfo air = new SimInfo();
-      SimInfo ground = new SimInfo();
-      for (Unit u : s.allies) {
-        if (u.isFlying()) {
-          air.allies.add(u);
+            aux.allies.addAll(friend.getElements());
+            simulations.add(aux);
         }
-        if (u instanceof GroundAttacker) {
-          ground.allies.add(u);
-        }
-      }
-      boolean emptyAir = air.allies.isEmpty();
-      boolean emptyGround = ground.allies.isEmpty();
-      if (emptyAir && emptyGround) {
-        continue;
-      }
-      for (Unit u : s.enemies) {
-        if (u instanceof AirAttacker) {
-          air.enemies.add(u);
-        }
-        if (u instanceof GroundAttacker) {
-          ground.enemies.add(u);
-        }
-      }
+        List<SimInfo> newSims = new ArrayList<>();
+        for (SimInfo s : simulations) {
+            SimInfo air = new SimInfo();
+            SimInfo ground = new SimInfo();
+            for (Unit u : s.allies) {
+                if (u.isFlying()) air.allies.add(u);
+                else ground.allies.add(u);
+            }
+            boolean emptyAir = air.allies.isEmpty();
+            boolean emptyGround = ground.allies.isEmpty();
+            if (emptyAir && emptyGround) continue;
+            for (Unit u : s.enemies) {
+                if (u instanceof AirAttacker) air.enemies.add(u);
+                if (u instanceof GroundAttacker || u instanceof Bunker) ground.enemies.add(u);
+            }
             /*if (!emptyAir && !air.enemies.isEmpty()) {
                 air.type = SimInfo.SimType.AIR;
                 newSims.add(air);
@@ -340,93 +296,94 @@ public class SimManager {
     }
   }
 
-  /**
-   * Updates the SimInfos created with the results of the simulations
-   */
-  private void doSim() {
-    int energy = 0;
-    for (ComsatStation s : getGs().CSs) {
-      if (s.getOrder() != Order.CastScannerSweep) {
-        energy += s.getEnergy() / 50;
-      }
+    private MutablePair<Integer, Integer> scores() {
+        ToIntFunction<Agent> score = a -> {
+            PlayerUnit unit = (PlayerUnit) a.getUserObject();
+            if (unit == null) {
+                return 0;
+            }
+            UnitType unitType = unit.getType();
+            int result = (unitType.destroyScore() * (a.getHealth() * 3 + a.getShields() + 1)) / (
+                    (unitType.maxHitPoints() * 3) + unitType.maxShields());
+            if (unitType == UnitType.Terran_Bunker) {
+                result += UnitType.Terran_Marine.destroyScore() * 4;
+            }
+            return result;
+        };
+        return new MutablePair<>(Assmulator.getAgentsA().stream().mapToInt(score).sum(),
+                Assmulator.getAgentsB().stream().mapToInt(score).sum());
     }
-    for (SimInfo s : simulations) {
-      simulator.reset();
-      if (s.enemies.isEmpty()) {
-        continue;
-      }
-      for (Unit u : s.allies) {
-        Agent jU = factory.of((PlayerUnit) u);
-        simulator.addAgentA(jU);
-        s.stateBefore.first.add(jU);
-      }
-      for (Unit u : s.enemies) {
-        if (u instanceof Worker && !((Worker) u).isAttacking()) {
-          continue;
+
+    /**
+     * Updates the SimInfos created with the results of the ASS simulations
+     */
+    private void doSimASS() {
+        int energy = getGs().CSs.stream().filter(s -> s.getOrder() != Order.CastScannerSweep).mapToInt(s -> s.getEnergy() / 50).sum();
+        for (SimInfo s : simulations) {
+            Assmulator.reset();
+            if (s.enemies.isEmpty()) continue;
+            for (Unit u : s.allies) {
+                Agent jU = factory.of((PlayerUnit) u);
+                Assmulator.addAgentA(jU);
+                s.stateBeforeASS.first.add(jU);
+            }
+            for (Unit u : s.enemies) {
+                if (u instanceof Worker && !((Worker) u).isAttacking()) continue;
+                if (u instanceof Building && !((Building) u).isCompleted()) continue;
+                if (!Util.isStaticDefense(u) && !u.getType().canAttack()) continue;
+                if (!((PlayerUnit) u).isDetected() && (u instanceof DarkTemplar || (u instanceof Lurker && ((Lurker) u).isBurrowed()))) {
+                    if (energy >= 1) energy -= 1;
+                    else {
+                        s.lose = true;
+                        break;
+                    }
+                }
+                Agent jU = factory.of((PlayerUnit) u);
+                Assmulator.addAgentB(jU);
+                s.stateBeforeASS.second.add(jU);
+            }
+            if (s.lose) continue;
+            s.preSimScoreASS = scores();
+            double estimate = evaluator.evaluate(s.stateBeforeASS.first, s.stateBeforeASS.second);
+            if (estimate < 0.1) {
+                s.lose = true;
+                continue;
+            }
+            if (estimate > 0.6) continue;
+            Assmulator.simulate(longSimFrames);
+            s.postSimScoreASS = scores();
+            s.stateAfterASS = new MutablePair<>(Assmulator.getAgentsA(), Assmulator.getAgentsB());
+            int ourLosses = s.preSimScoreASS.first - s.postSimScoreASS.first;
+            int enemyLosses = s.preSimScoreASS.second - s.postSimScoreASS.second;
+            if (s.stateAfterASS.first.isEmpty()) {
+                s.lose = true;
+                continue;
+            }
+            if (enemyLosses > ourLosses * 1.35) continue;
+            Assmulator.simulate(longSimFrames);
+            s.postSimScoreASS = scores();
+            s.stateAfterASS = new MutablePair<>(Assmulator.getAgentsA(), Assmulator.getAgentsB());
+            //Bad lose sim logic, testing
+            if (s.stateAfterASS.first.isEmpty()) s.lose = true;
+            else if (getGs().strat.name.equals("ProxyBBS")) s.lose = !scoreCalcASS(s, 1.3);
+            else if (getGs().strat.name.equals("ProxyEightRax")) s.lose = !scoreCalcASS(s, 1.5);
+            else s.lose = !scoreCalcASS(s, 2);
         }
-        if (u instanceof Building && !((Building) u).isCompleted()) {
-          continue;
-        }
-        if (!Util.isStaticDefense(u) && !u.getType().canAttack()) {
-          continue;
-        }
-        if (!((PlayerUnit) u).isDetected() && (u instanceof DarkTemplar || (u instanceof Lurker
-            && ((Lurker) u).isBurrowed()))) {
-          if (energy >= 1) {
-            energy -= 1;
-          } else {
-            s.lose = true;
-            break;
-          }
-        }
-        Agent jU = factory.of((PlayerUnit) u);
-        simulator.addAgentB(jU);
-        s.stateBefore.second.add(jU);
-      }
-      if (s.lose) {
-        continue;
-      }
-      if (getGs().getArmySize(s.allies) >= s.enemies.size() * 5) {
-        return;
-      }
-      s.preSimScore = scores();
-      double estimate = evaluator.evaluate(s.stateBefore.first, s.stateBefore.second);
-      if (estimate < 0.1) {
-        s.lose = true;
-        continue;
-      }
-      if (estimate > 0.6) {
-        continue;
-      }
-      simulator.simulate(longSimFrames);
-      s.postSimScore = scores();
-      s.stateAfter = new MutablePair<>(simulator.getAgentsA(), simulator.getAgentsB());
-      //Bad lose sim logic, testing
-      if (s.stateAfter.first.isEmpty()) {
-        s.lose = true;
-      } else if (getGs().strat.name.equals("ProxyBBS")) {
-        s.lose = !scoreCalc(s, 1.3);
-      } else if (getGs().strat.name.equals("EightRax")) {
-        s.lose = !scoreCalc(s, 1.5);
-      } else {
-        s.lose = !scoreCalc(s, 2.5);
-      }
     }
-  }
+
 
   /**
-   * Given a SimInfo and a rate deduces if a battle is won by the bot
-   *
-   * @param s SimInfo simulated
-   * @param rate Rate or ratio for comparing enemy and ally units score
-   * @return True if the battle simulated is advantageous for the bot
-   */
-  private boolean scoreCalc(SimInfo s, double rate) {
-    return ((s.preSimScore.second - s.postSimScore.second) * rate <= (s.preSimScore.first
-        - s.postSimScore.first));
-  }
+     * Given a SimInfo and a rate deduces if a battle is won by the bot using ASS
+     *
+     * @param s    SimInfo simulated
+     * @param rate Rate or ratio for comparing enemy and ally units score
+     * @return True if the battle simulated is advantageous for the bot
+     */
+    private boolean scoreCalcASS(SimInfo s, double rate) {
+        return ((s.preSimScoreASS.second - s.postSimScoreASS.second) * rate <= (s.preSimScoreASS.first - s.postSimScoreASS.first));
+    }
 
-  /**
+    /**
    * Draws a cluster on the screen
    *
    * @param c The cluster to be drawn
@@ -467,16 +424,16 @@ public class SimManager {
   // TODO improve and search for bunkers SimInfos
   public MutablePair<Boolean, Boolean> simulateDefenseBattle(Set<Unit> friends, Set<Unit> enemies,
       int frames, boolean bunker) {
-    simulator.reset();
+    Assmulator.reset();
     MutablePair<Boolean, Boolean> result = new MutablePair<>(true, false);
     for (Unit u : friends) {
-      simulator.addAgentA(factory.of((PlayerUnit) u));
+      Assmulator.addAgentA(factory.of((PlayerUnit) u));
     }
     for (Unit u : enemies) {
-      simulator.addAgentB(factory.of((PlayerUnit) u));
+      Assmulator.addAgentB(factory.of((PlayerUnit) u));
     }
     MutablePair<Integer, Integer> presim_scores = scores();
-    simulator.simulate(frames);
+    Assmulator.simulate(frames);
     MutablePair<Integer, Integer> postsim_scores = scores();
     int my_score_diff = presim_scores.first - postsim_scores.first;
     int enemy_score_diff = presim_scores.second - postsim_scores.second;
@@ -485,7 +442,7 @@ public class SimManager {
     }
     if (bunker) {
       boolean bunkerDead = true;
-      for (Agent unit : simulator.getAgentsA()) {
+      for (Agent unit : Assmulator.getAgentsA()) {
         if (unit.getUserObject() == null) {
           continue;
         }
@@ -504,14 +461,14 @@ public class SimManager {
 
   // TODO improve and search for harasser SimInfo
   public boolean simulateHarass(Unit harasser, Collection<Unit> enemies, int frames) {
-    simulator.reset();
-    simulator.addAgentA(factory.of((PlayerUnit) harasser));
+    Assmulator.reset();
+    Assmulator.addAgentA(factory.of((PlayerUnit) harasser));
     for (Unit u : enemies) {
-      simulator.addAgentB(factory.of((PlayerUnit) u));
+      Assmulator.addAgentB(factory.of((PlayerUnit) u));
     }
-    int preSimFriendlyUnitCount = simulator.getAgentsA().size();
-    simulator.simulate(frames);
-    int postSimFriendlyUnitCount = simulator.getAgentsA().size();
+    int preSimFriendlyUnitCount = Assmulator.getAgentsA().size();
+    Assmulator.simulate(frames);
+    int postSimFriendlyUnitCount = Assmulator.getAgentsA().size();
     int myLosses = preSimFriendlyUnitCount - postSimFriendlyUnitCount;
     return myLosses <= 0;
   }
@@ -559,14 +516,24 @@ public class SimManager {
    * @return True if the unit is not getting attacked and far from the fight
    */
   public boolean farFromFight(Unit u, SimInfo s) { // TODO test
-    if (!s.allies.contains(u) || s.enemies.isEmpty()) {
+    if (u == null || !u.exists()) return true;
+        if (!s.allies.contains(u) || s.enemies.isEmpty()) {
       return true;
     }
     WeaponType weapon = Util.getWeapon(u.getType());
     int range = weapon == WeaponType.None ? UnitType.Terran_Marine.groundWeapon().maxRange()
         : (weapon.maxRange() > 32 ? weapon.maxRange()
             : UnitType.Terran_Marine.groundWeapon().maxRange());
-    return !((PlayerUnit) u).isUnderAttack()
-        && u.getDistance(Util.getClosestUnit(u, s.enemies)) > range * 1.5;
-  }
+    Unit closest = Util.getClosestUnit(u, s.enemies);
+        if (closest != null) {return !((PlayerUnit) u).isUnderAttack()
+        && u.getDistance(closest) > range * 1.5;
+  }return true;
+    }
+
+    public SimInfo getSimulation(Cluster c) {
+        for (SimInfo s : simulations) {
+            if (s.allyCluster.equals(c)) return s;
+        }
+        return new SimInfo();
+    }
 }

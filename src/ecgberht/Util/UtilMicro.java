@@ -13,7 +13,9 @@ import static ecgberht.Ecgberht.getGs;
 public class UtilMicro {
 
     public static void attack(MobileUnit attacker, Position pos) {
-        if (pos == null || attacker == null || !attacker.exists() || attacker.isAttackFrame()) return;
+        if (pos == null || attacker == null || !attacker.exists() || attacker.isAttackFrame() || attacker.isStartingAttack())
+            return;
+        if (getGs().frameCount == attacker.getLastCommandFrame()) return;
         Position targetPos = attacker.getTargetPosition();
         if (pos.equals(targetPos)) return;
         if (!getGs().getGame().getBWMap().isValidPosition(pos)) return;
@@ -24,6 +26,7 @@ public class UtilMicro {
     public static void attack(Attacker attacker, Unit target) {
         if (attacker == null || target == null || !attacker.exists() || !target.exists() || attacker.isAttackFrame())
             return;
+        if (getGs().frameCount == attacker.getLastCommandFrame()) return;
         Unit targetUnit = attacker.getTargetUnit();
         if (target.equals(targetUnit)) return;
         attacker.attack(target);
@@ -68,9 +71,7 @@ public class UtilMicro {
     // Credits to @Yegers for a better kite method
     public static Position kiteAway(final Unit unit, final Set<Unit> enemies) {
         try {
-            if (enemies.isEmpty()) {
-                return null;
-            }
+            if (enemies.isEmpty()) return null;
             Position ownPosition = unit.getPosition();
             List<MutablePair<Double, Double>> vectors = new ArrayList<>();
 
@@ -79,7 +80,7 @@ public class UtilMicro {
                 final Position enemyPosition = enemy.getPosition();
                 Position sub = ownPosition.subtract(enemyPosition);
                 MutablePair<Double, Double> unitV = new MutablePair<>((double) sub.getX(), (double) sub.getY());
-                final double distance = enemy.getDistance(unit);
+                //final double distance = enemy.getDistance(unit);
                 /*if (distance < minDistance) {
                     minDistance = distance;
                 }*/
@@ -101,4 +102,66 @@ public class UtilMicro {
             return null;
         }
     }
+
+    public static void heal(Medic u, PlayerUnit heal) {
+        if (u == null || heal == null || u.getLastCommandFrame() == getGs().frameCount) return;
+        Unit targetUnit = u.getTargetUnit();
+        if (heal.equals(targetUnit)) return;
+        u.heal(heal);
+    }
+
+    public static void heal(Medic u, Position heal) {
+        if (u == null || heal == null || !getGs().bw.getBWMap().isValidPosition(heal)) return;
+        if (u.getLastCommandFrame() == getGs().frameCount) return;
+        Position targetPos = u.getTargetPosition();
+        if (heal.equals(targetPos)) return;
+        u.heal(heal);
+    }
+
+    public static void stop(MobileUnit u) {
+        if (getGs().frameCount == u.getLastCommandFrame()) return;
+        if (u.getOrder() == Order.Stop) return;
+        u.stop(false);
+    }
+
+    public static Position predictUnitPosition(Unit unit, int frames) {
+        if (unit == null || !unit.exists() || !unit.isVisible()) return null;
+        if (!(unit instanceof MobileUnit)) return unit.getPosition();
+        return unit.getPosition().add(new Position((int) (frames * ((MobileUnit) unit).getVelocityX()), (int) (frames * ((MobileUnit) unit).getVelocityY())));
+    }
+
+    private static boolean verifyPosition(Position position) {
+        if (!getGs().getGame().getBWMap().isValidPosition(position)) return false;
+        if (getGs().map.getMap()[position.getY() / 32][position.getX() / 32].equals("0")) return false;
+        return getGs().getGame().getBWMap().isWalkable(position.toWalkPosition());
+    }
+
+    // Based on @Locutus micro logic, credits to him.
+    public static Position kiteAwayAlt(Position unitPos, Position fleePos) {
+        Position delta = fleePos.subtract(unitPos);
+        double angleToTarget = Math.atan2(delta.getY(), delta.getX());
+        Position bestPosition = null;
+        boolean shouldBreak = false;
+        for (int i = 0; i <= 3; i++) {
+            if (shouldBreak) break;
+            for (int sign = -1; i == 0 ? sign == -1 : sign <= 1; sign += 2) {
+                double a = angleToTarget + (i * sign * Math.PI / 6);
+                Position position = new Position(unitPos.getX() - (int) Math.round(64.0 * Math.cos(a)),
+                        unitPos.getY() - (int) Math.round(64.0 * Math.sin(a)));
+                if (!verifyPosition(position) || !verifyPosition(position.add(new Position(-16, -16))) ||
+                        !verifyPosition(position.add(new Position(16, -16))) ||
+                        !verifyPosition(position.add(new Position(16, 16))) ||
+                        !verifyPosition(position.add(new Position(-16, 16)))) {
+                    continue;
+                }
+                bestPosition = position;
+                shouldBreak = true;
+            }
+        }
+        if (bestPosition != null && getGs().getGame().getBWMap().isValidPosition(bestPosition)) {
+            return bestPosition;
+        }
+        return null;
+    }
+
 }
